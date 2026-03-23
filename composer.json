@@ -1,0 +1,26 @@
+{
+    "name": "zamaldev/json-model",
+    "description": "Fast parse json info model",
+    "type": "library",
+    "homepage": "https://github.com/zamaldev/json-model",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Zamaldev\\JsonModel\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "require-dev": {
+        "phpbench/phpbench": "^1.6",
+        "phpunit/phpunit": "^11"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
