@@ -6,9 +6,8 @@ namespace Tests\Model;
 
 use Zamaldev\JsonModel\Attributes\AsArray;
 use Zamaldev\JsonModel\Attributes\Map;
-use Zamaldev\JsonModel\JsonModel;
 
-class Model1 extends JsonModel
+class Model1
 {
     public string $string;
 

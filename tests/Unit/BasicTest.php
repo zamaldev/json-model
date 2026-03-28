@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
+use Exception;
 use PHPUnit\Framework\TestCase;
 use Tests\Model\Model1;
+use Zamaldev\JsonModel\Attributes\AsArray;
 use Zamaldev\JsonModel\JsonModel;
 
-class JsonModelTest extends TestCase
+class BasicTest extends TestCase
 {
     public function testParse_from_array()
     {
@@ -289,4 +291,47 @@ class JsonModelTest extends TestCase
 
         $this->assertSame('', $model->string);
     }
+
+    public function testParse_unknown_type()
+    {
+        $parser = new JsonModel();
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('Cannot found type of value. It must have named type or has attribute that implements Caster interface.');
+        $parser->parse(['value' => 'string'], Model_unknown_type::class);
+    }
+
+    public function testParse_unknown_array_type()
+    {
+        $parser = new JsonModel();
+
+        $model = $parser->parse(['array' => ['string']], Model_unknown_array_type::class);
+
+        $this->assertSame('string', $model->array[0]);
+    }
+
+    public function testParse_missing_array_type()
+    {
+        $parser = new JsonModel();
+
+        $model = $parser->parse(['unknownArray' => ['string']], Model_missing_array_type::class);
+
+        $this->assertSame('string', $model->unknownArray[0]);
+    }
+}
+
+class Model_unknown_type
+{
+    public $value;
+}
+
+class Model_unknown_array_type
+{
+    public array $array;
+}
+
+class Model_missing_array_type
+{
+    #[AsArray(itemType: null)]
+    public array $unknownArray;
 }

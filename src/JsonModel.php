@@ -6,26 +6,27 @@ namespace Zamaldev\JsonModel;
 
 use Closure;
 use Exception;
+use ReflectionAttribute;
 use ReflectionClass;
+use ReflectionNamedType;
 use stdClass;
 use Zamaldev\JsonModel\Attributes\AsArray;
+use Zamaldev\JsonModel\Attributes\Caster;
 use Zamaldev\JsonModel\Attributes\Map;
 use Zamaldev\JsonModel\Attributes\MapKeys;
+use Zamaldev\JsonModel\Attributes\Sanitizer;
 
-class JsonModel
+class JsonModel implements JsonModelInterface
 {
     /**
      * Model's structure cache.
      *
-     * @var array<class-string,array{properties:array{name:string,key:string,type:\Closure,is_array:bool}}>
+     * @var array<class-string,array{properties:array{name:string,key:string,type:\Closure,sanitizers:array<Sanitizer>,is_array:bool}}>
      */
-    private static array $meta = [];
+    protected static array $meta = [];
 
     /**
-     * Parse json from string, array, \stdClass.
-     *
-     * @param string|array|stdClass $json
-     * @param class-string<T>|T $object
+     * @inheritDoc
      *
      * @return T
      *
@@ -61,7 +62,7 @@ class JsonModel
      *
      * @return object
      */
-    private function parseFromStdClass(stdClass $json, object $object): object
+    protected function parseFromStdClass(stdClass $json, object $object): object
     {
         $meta = $this->getMeta($object);
 
@@ -77,6 +78,9 @@ class JsonModel
             $tmpValue = $json->{$key};
 
             if (!$property['is_array']) {
+                foreach ($property['sanitizers'] as $sanitizer) {
+                    $tmpValue = $sanitizer->sanitize($tmpValue);
+                }
                 $object->{$name} = $type($tmpValue);
 
                 continue;
@@ -84,8 +88,8 @@ class JsonModel
 
             $res = [];
             foreach ($tmpValue as $value) {
-                if (null === $value) {
-                    continue;
+                foreach ($property['sanitizers'] as $sanitizer) {
+                    $value = $sanitizer->sanitize($value);
                 }
 
                 $res[] = $type($value);
@@ -100,9 +104,9 @@ class JsonModel
     /**
      * @param object $object
      *
-     * @return array{properties:array{name:string,key:string,type:\Closure,is_array:bool}}
+     * @return array{properties:array{name:string,key:string,type:\Closure,sanitizers:array<Sanitizer>,is_array:bool}}
      */
-    private function getMeta(object $object): array
+    protected function getMeta(object $object): array
     {
         $class = $object::class;
         if (isset(self::$meta[$class])) {
@@ -127,13 +131,30 @@ class JsonModel
                 $key = $attribute->getArguments()['name'] ?? $key;
             }
 
-            $tmpType = $property->getType()->getName();
+            $type = $property->getType();
+            $tmpType = null;
+            $castType = null;
+            if ($type instanceof ReflectionNamedType) {
+                $tmpType = $property->getType()->getName();
+            }
+            foreach ($property->getAttributes(Caster::class, ReflectionAttribute::IS_INSTANCEOF) as $attribute) {
+                $castType = $attribute->newInstance();
+            }
+            if (null === $tmpType && null === $castType) {
+                throw new Exception("Cannot found type of {$name}. It must have named type or has attribute that implements Caster interface.");
+            }
+
+            $sanitizers = [];
+            foreach ($property->getAttributes(Sanitizer::class, ReflectionAttribute::IS_INSTANCEOF) as $attribute) {
+                $sanitizers[] = $attribute->newInstance();
+            }
 
             if ('array' !== $tmpType) {
                 $properties[] = [
                     'name' => $name,
                     'key' => $key,
-                    'type' => $this->getTypeCallback($tmpType),
+                    'type' => $this->getTypeCallback($castType ?? $tmpType),
+                    'sanitizers' => $sanitizers,
                     'is_array' => false,
                 ];
 
@@ -144,13 +165,14 @@ class JsonModel
 
             $arrayType = 'string';
             foreach ($property->getAttributes(AsArray::class) as $attribute) {
-                $arrayType = $attribute->getArguments()['itemType'] ?? $arrayType;
+                $arrayType = $attribute->getArguments()['itemType'] ?? $castType ?? $arrayType;
             }
 
             $properties[] = [
                 'name' => $name,
                 'key' => $key,
                 'type' => $this->getTypeCallback($arrayType),
+                'sanitizers' => $sanitizers,
                 'is_array' => true,
             ];
         }
@@ -167,12 +189,16 @@ class JsonModel
     /**
      * Convert item to any type except array, and object.
      *
-     * @param string $type
+     * @param string|Caster $type
      *
      * @return Closure
      */
-    private function getTypeCallback(string $type): Closure
+    protected function getTypeCallback(string|Caster $type): Closure
     {
+        if ($type instanceof Caster) {
+            return fn(mixed $item) => $type->cast($this, $item);
+        }
+
         switch ($type) {
             case 'string':
                 return static fn(mixed $item) => (string) $item;

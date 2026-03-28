@@ -26,8 +26,6 @@ use Zamaldev\JsonModel\JsonModel;
 
 require 'vendor/autoload.php';
 
-$data = '{"key":"value","key2":2}';
-
 class Model {
     public string $key;
 
@@ -35,6 +33,8 @@ class Model {
 }
 
 $parser = new JsonModel();
+
+$data = '{"key":"value","key2":2}';
 
 $model = $parser->parse($data, Model::class);
 
@@ -52,8 +52,6 @@ use Zamaldev\JsonModel\JsonModel;
 
 require 'vendor/autoload.php';
 
-$data = '{"key":"value","key2":2}';
-
 class Model {
     #[Map(name: 'key')]
     public string $string;
@@ -63,6 +61,8 @@ class Model {
 }
 
 $parser = new JsonModel();
+
+$data = '{"key":"value","key2":2}';
 
 $model = $parser->parse($data, Model::class);
 
@@ -79,8 +79,6 @@ use Zamaldev\JsonModel\Attributes\AsArray;
 use Zamaldev\JsonModel\JsonModel;
 
 require 'vendor/autoload.php';
-
-$data = '{"key":["value"],"key2":[1,2],"key3":[{"obj_key":"obj_val"}]}';
 
 class Model {
     #[AsArray()] // by default 'string'
@@ -99,6 +97,8 @@ class SubModel {
 
 $parser = new JsonModel();
 
+$data = '{"key":["value"],"key2":[1,2],"key3":[{"obj_key":"obj_val"}]}';
+
 $model = $parser->parse($data, Model::class);
 
 echo $model->key[0]; // "value"
@@ -106,3 +106,84 @@ echo $model->key2[0]; // 1
 echo $model->key2[1]; // 2
 echo $model->key3[0]->obj_key; // "obj_val"
 ```
+
+## DNF types
+
+While working with inconsistent APIs, sometime you may need to support few types per one property. This is possible using `Attributes\Caster` interface. However, only you know the resolution logic, so you should write your own implementation for your specific case. Casters works with scalar typed properties and with arrays. If you need to cast value to any model, you have the `$jsonModel` parameter, this is current `JSONModel` instance, so you could use `parse` method.
+
+```php
+use Zamaldev\JsonModel\Attributes\Caster;
+use Zamaldev\JsonModel\JsonModel;
+use Zamaldev\JsonModel\JsonModelInterface;
+
+require 'vendor/autoload.php';
+
+#[Attribute(Attribute::TARGET_PROPERTY)]
+class CustomCaster implements Caster
+{
+    public function cast(JsonModelInterface $jsonModel, mixed $value): mixed
+    {
+        // Here will be your logic.
+        if (is_array($value)) {
+            return $value;
+        }
+        if (is_object($value)) {
+            return $jsonModel->parse($value, Model::class);
+        }
+
+        return (string) $value;
+    }
+}
+
+class Model {
+    #[CustomCaster]
+    public self|string|array $result;
+}
+
+$parser = new JsonModel();
+
+$data = '{"result":["value"]}';
+
+$model = $parser->parse($data, Model::class);
+echo $model->result[0]; // "value"
+
+$data = '{"result":"error"}';
+
+$model = $parser->parse($data, Model::class);
+echo $model->result; // "error"
+
+$data = '{"result":{"result":"ok"}}';
+
+$model = $parser->parse($data, Model::class);
+echo $model->result->result; // "ok"
+```
+
+## Sanitizer
+
+Don't blind trust any third party API you work with. It is important to validate or at least simple sanitize the input. For this purpose, you can use `Attributes\Sanitizer` interface. Package already provides `Attributes\SimpleSanitizer`, but you can write your own for your needs.
+
+```php
+use Zamaldev\JsonModel\Attributes\SimpleSanitizer;
+use Zamaldev\JsonModel\JsonModel;
+
+require 'vendor/autoload.php';
+
+class Model
+{
+    #[SimpleSanitizer('trim')]
+    #[SimpleSanitizer('strtolower')]
+    #[SimpleSanitizer('ucfirst')]
+    public string $result;
+}
+
+$parser = new JsonModel();
+
+$data = '{"result":"   vAlUe   "}';
+
+$model = $parser->parse($data, Model::class);
+echo $model->result; // "Value"
+```
+
+Note attributes order. As you can see from example, it goes from top to bottom, so sanitize chain will goes like this:
+
+`"   vAlUe   " -(trim)-> "vAlUe" -(strtolower)-> "value" -(ucfirst)-> "Value"`

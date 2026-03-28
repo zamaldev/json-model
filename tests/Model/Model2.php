@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Model;
 
-use Zamaldev\JsonModel\JsonModel;
-
-class Model2 extends JsonModel
+class Model2
 {
     public string $string1;
 
