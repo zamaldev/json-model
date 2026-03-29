@@ -1,0 +1,4 @@
+    /**
+     * @var {{phpdoc_type}} ${{name}}
+     */{{attributes}}
+    public {{type}} ${{name}} = {{default}};

@@ -1,0 +1,7 @@
+<?php
+{{strict_types}}
+namespace {{namespace}};
+{{use}}
+class {{class_name}}
+{{{properties}}
+}

@@ -10,7 +10,8 @@ use Attribute;
 class AsArray
 {
     public function __construct(
-        public ?string $itemType,
+        public string $itemType,
+        public int $level = 1,
     ) {
     }
 }

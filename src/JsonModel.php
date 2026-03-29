@@ -21,7 +21,7 @@ class JsonModel implements JsonModelInterface
     /**
      * Model's structure cache.
      *
-     * @var array<class-string,array{properties:array{name:string,key:string,type:\Closure,sanitizers:array<Sanitizer>,is_array:bool}}>
+     * @var array<class-string,array{array{name:string,key:string,type:\Closure,sanitizers:array<Sanitizer>,array_level:int}}>
      */
     protected static array $meta = [];
 
@@ -66,7 +66,7 @@ class JsonModel implements JsonModelInterface
     {
         $meta = $this->getMeta($object);
 
-        foreach ($meta['properties'] as $property) {
+        foreach ($meta as $property) {
             $key = $property['key'];
             if (!property_exists($json, $key)) {
                 continue;
@@ -77,7 +77,7 @@ class JsonModel implements JsonModelInterface
 
             $tmpValue = $json->{$key};
 
-            if (!$property['is_array']) {
+            if (!$property['array_level']) {
                 foreach ($property['sanitizers'] as $sanitizer) {
                     $tmpValue = $sanitizer->sanitize($tmpValue);
                 }
@@ -86,25 +86,42 @@ class JsonModel implements JsonModelInterface
                 continue;
             }
 
-            $res = [];
-            foreach ($tmpValue as $value) {
-                foreach ($property['sanitizers'] as $sanitizer) {
-                    $value = $sanitizer->sanitize($value);
-                }
-
-                $res[] = $type($value);
-            }
-
-            $object->{$name} = $res;
+            $object->{$name} = $this->getArrayValues($tmpValue, $property['sanitizers'], $type, $property['array_level']);
         }
 
         return $object;
     }
 
     /**
+     * @param array $tmpValue
+     * @param array $sanitizers
+     * @param Closure $type
+     * @param int $arrayLevel
+     *
+     * @return array
+     */
+    protected function getArrayValues(array $tmpValue, array $sanitizers, Closure $type, int $arrayLevel): array
+    {
+        $res = [];
+        if (1 < $arrayLevel) {
+            return array_map(fn ($value) => $this->getArrayValues($value, $sanitizers, $type, $arrayLevel - 1), $tmpValue);
+        }
+        $res = [];
+        foreach ($tmpValue as $value) {
+            foreach ($sanitizers as $sanitizer) {
+                $value = $sanitizer->sanitize($value);
+            }
+
+            $res[] = $type($value);
+        }
+
+        return $res;
+    }
+
+    /**
      * @param object $object
      *
-     * @return array{properties:array{name:string,key:string,type:\Closure,sanitizers:array<Sanitizer>,is_array:bool}}
+     * @return array{array{name:string,key:string,type:\Closure,sanitizers:array<Sanitizer>,array_level:int}}
      */
     protected function getMeta(object $object): array
     {
@@ -155,7 +172,7 @@ class JsonModel implements JsonModelInterface
                     'key' => $key,
                     'type' => $this->getTypeCallback($castType ?? $tmpType),
                     'sanitizers' => $sanitizers,
-                    'is_array' => false,
+                    'array_level' => 0,
                 ];
 
                 continue;
@@ -164,8 +181,11 @@ class JsonModel implements JsonModelInterface
             // From here property is an array.
 
             $arrayType = 'string';
+            $arrayLevel = 1;
             foreach ($property->getAttributes(AsArray::class) as $attribute) {
-                $arrayType = $attribute->getArguments()['itemType'] ?? $castType ?? $arrayType;
+                $arguments = $attribute->getArguments();
+                $arrayType = $arguments['itemType'] ?? $castType ?? $arrayType;
+                $arrayLevel = $arguments['level'] ?? $arrayLevel;
             }
 
             $properties[] = [
@@ -173,17 +193,13 @@ class JsonModel implements JsonModelInterface
                 'key' => $key,
                 'type' => $this->getTypeCallback($arrayType),
                 'sanitizers' => $sanitizers,
-                'is_array' => true,
+                'array_level' => $arrayLevel,
             ];
         }
 
-        $meta = [
-            'properties' => $properties,
-        ];
+        self::$meta[$class] = $properties;
 
-        self::$meta[$class] = $meta;
-
-        return $meta;
+        return $properties;
     }
 
     /**

@@ -7,6 +7,7 @@ namespace Tests\Unit;
 use Exception;
 use PHPUnit\Framework\TestCase;
 use Tests\Model\Model1;
+use Tests\Model\ModelNestedArray;
 use Zamaldev\JsonModel\Attributes\AsArray;
 use Zamaldev\JsonModel\JsonModel;
 
@@ -317,6 +318,24 @@ class BasicTest extends TestCase
         $model = $parser->parse(['unknownArray' => ['string']], Model_missing_array_type::class);
 
         $this->assertSame('string', $model->unknownArray[0]);
+    }
+
+    public function testParse_nested_array()
+    {
+        $parser = new JsonModel();
+
+        $data = [1,2,3];
+        for ($i = 0; $i < 99; $i++) {
+            $data = [$data];
+        }
+
+        $model = $parser->parse(['data' => $data], ModelNestedArray::class);
+
+        $modelData = $model->data;
+        for ($i = 0; $i < 99; $i++) {
+            $modelData = reset($modelData);
+        }
+        $this->assertSame([1, 2, 3], $modelData);
     }
 }
 

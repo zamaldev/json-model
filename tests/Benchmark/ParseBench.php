@@ -9,6 +9,7 @@ use PhpBench\Attributes\Revs;
 use PhpBench\Attributes\ParamProviders;
 use Tests\Model\Model1;
 use Tests\Model\Model2;
+use Tests\Model\ModelNestedArray;
 use Zamaldev\JsonModel\JsonModel;
 use Zamaldev\JsonModel\JsonModelInterface;
 
@@ -112,5 +113,21 @@ class ParseBench
             'arrayOfNumbers' => [1, 3, 5, 7, 9, 2, 4, 6, 8, 0],
             'arrayOfObjects' => array_fill(0, 1000, self::FLAT_OBJECT),
         ])];
+    }
+
+    #[ParamProviders('provide100Nested')]
+    public function bench100Nested($params): void
+    {
+        $this->JsonModel->parse($params['data'], ModelNestedArray::class);
+    }
+
+    public function provide100Nested()
+    {
+        $data = [1,2,3];
+        for ($i = 0; $i < 99; $i++) {
+            $data = [$data];
+        }
+
+        yield ['data' => json_encode(['data' => $data])];
     }
 }
