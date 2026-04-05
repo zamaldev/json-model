@@ -142,7 +142,7 @@ class JsonModel implements JsonModelInterface
         foreach ($reflection->getProperties() as $property) {
             $key = $name = $property->getName();
             if (null !== $keyMapper) {
-                $key = $keyMapper->map($key);
+                $key = $keyMapper->map($name);
             }
             foreach ($property->getAttributes(Map::class) as $attribute) {
                 $key = $attribute->getArguments()['name'] ?? $key;
