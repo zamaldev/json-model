@@ -132,16 +132,19 @@ class JsonGenerator
             throw new Exception('JSON string could not be empty');
         }
 
-        $root      = json_decode($json);
+        $root = json_decode($json);
+        if (!$root) {
+            return false;
+        }
+
         $structure = $this->proceedNode($root);
 
         $filesStructure = [
             self::KEY_TYPE         => $this->propertyType(''),
             self::KEY_SUBSTRUCTURE => $structure,
         ];
-        $this->buildFile($filesStructure);
 
-        return true;
+        return $this->buildFile($filesStructure);
     }
 
     /**
